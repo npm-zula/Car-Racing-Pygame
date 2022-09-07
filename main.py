@@ -4,6 +4,9 @@ import time
 from utilitiy import scale_image, rotate_image
 
 FPS = 60
+PATH = [(172, 128), (118, 79), (63, 123), (66, 469), (66, 407), (118, 537), (343, 729), (274, 687), (406, 675), (425, 512), (504, 481), 
+(590, 541), (597, 665), (670, 736), (735, 674), (739, 438), (732, 392), (680, 376),(453, 364), (408, 317), (448, 263), (695, 268), (731, 176), 
+(687, 71), (553, 74), (385, 65), (286, 125), (287, 257), (281, 359), (230, 403), (172, 348),(130,250) ]
 
 GRASS = scale_image(pygame.image.load("imgs/grass.jpg"),2.5) 
 TRACK = scale_image(pygame.image.load("imgs/track.png"),0.9) 
@@ -71,7 +74,64 @@ class AbstractCar:
         self.x, self.y = self.START_POS
         self.angle = 0
         self.vel = 0
+
+
+class ComputerCar(AbstractCar):
+    IMG = GREEN_CAR
+    START_POS = (150,200)
     
+    def __init__(self, max_velocity, rotation_velocity, path=[]):
+        super().__init__(max_velocity, rotation_velocity)
+        self.path = path
+        self.current_point = 0
+        self.vel = max_velocity
+        
+    def draw_points (self, WINDOW):
+        for point in self.path:
+            pygame.draw.circle(WINDOW, (255,0,0), point, 5)
+    
+    def draw(self, WINDOW):
+        # self.draw_points(WINDOW)
+        super().draw(WINDOW)
+        
+    def move(self):
+        if self.current_point >= len(self.path):
+            return
+        
+        self.calc_angle()
+        self.update_path_point()
+        super().move()
+    
+    def calc_angle(self):
+        target_x, target_y = self.path[self.current_point]
+        xDiff = target_x - self.x
+        yDiff = target_y - self.y
+        
+        if yDiff == 0:
+            radianAngle = math.pi/2
+        else:
+            radianAngle = math.atan(xDiff/yDiff)
+            
+        if target_y > self.y:
+            radianAngle += math.pi
+        
+        radianAngle = self.angle - math.degrees(radianAngle)
+        
+        if radianAngle >= 180:
+            radianAngle -= 360
+        
+        if radianAngle > 0:
+            self.angle -= min(self.rotation_velocity,abs(radianAngle))
+        else:
+            self.angle += min(self.rotation_velocity,abs(radianAngle))
+
+    def update_path_point(self):
+        target = self.path[self.current_point]
+        rect = pygame.Rect(self.x, self.y, self.img.get_width(), self.img.get_height())
+        
+        if rect.collidepoint(*target):
+            self.current_point+=1
+        
     
 class PlayerCar(AbstractCar):
     IMG = RED_CAR
@@ -84,12 +144,17 @@ class PlayerCar(AbstractCar):
     def collideBounce(self):
         self.vel =- self.vel
         self.move()
-
-def draw(WINDOW, images, playerCar):
+    
+    
+            
+        
+# functions
+def draw(WINDOW, images, playerCar, compCar):
     for img,pos in images:
         WINDOW.blit(img,pos)
     
     playerCar.draw(WINDOW)
+    compCar.draw(WINDOW)
     pygame.display.update()
 
 def keysMove(playerCar):
@@ -109,29 +174,18 @@ def keysMove(playerCar):
     
     if not moved:
         playerCar.reduceSpeed()
-    
 
-
-# running game
-run = True
-clock = pygame.time.Clock()
-images = [(GRASS, (0,0)), (TRACK, (0,0)), (FINISH,(FINISH_POS)), (TRACK_BORDER, (0,0))]
 playerCar = PlayerCar(4, 4)
+compCar = ComputerCar(4, 4, PATH)
 
-while run:
-    clock.tick(FPS)
-    
-    draw(WINDOW,images,playerCar)
-    pygame.display.update()
-    
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            run = False
-            break
-    
-    keysMove(playerCar)
+def handleCollision(playerCar,compCar):
     if playerCar.collide(TRACK_BORDER_MASS) != None:
         playerCar.collideBounce()
+    
+    comp_finish_intersect_collide = compCar.collide(FINISH_MASK, *FINISH_POS)
+    if(comp_finish_intersect_collide != None):
+        playerCar.reset()
+        compCar.reset()
     
     finish_intersect_collide = playerCar.collide(FINISH_MASK, *FINISH_POS)
     if playerCar.collide(FINISH_MASK, *FINISH_POS):
@@ -139,7 +193,31 @@ while run:
             playerCar.collideBounce()
         else:
             playerCar.reset()
+            compCar.reset()
             print("finish")
+
+# running game
+run = True
+clock = pygame.time.Clock()
+images = [(GRASS, (0,0)), (TRACK, (0,0)), (FINISH,(FINISH_POS)), (TRACK_BORDER, (0,0))]
+
+
+while run:
+    clock.tick(FPS)
+    
+    draw(WINDOW,images,playerCar,compCar)
+    pygame.display.update()
+    
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            run = False
+            break
         
     
+    keysMove(playerCar)
+    compCar.move()
+    
+    handleCollision(playerCar, compCar)
+        
+print(compCar.path)
 pygame.quit()
